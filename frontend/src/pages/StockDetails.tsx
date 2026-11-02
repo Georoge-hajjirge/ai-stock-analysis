@@ -5,11 +5,8 @@ import {
     Star,
     TrendingUp,
 } from "lucide-react";
-import {
-    addToWatchlist,
-    getWatchlist,
-    removeFromWatchlist,
-} from "../services/watchlistService";
+import { useFavourites } from "../hooks/useFavourites";
+import { useAuth } from "../hooks/useAuth";
 import { useNavigate, useParams } from "react-router-dom";
 
 import StockOverview from "../components/StockOverview";
@@ -72,7 +69,6 @@ function StockDetails() {
     const [question, setQuestion] = useState("");
 
     const [messages, setMessages] = useState<ChatMessage[]>([]);
-    const [isInWatchlist, setIsInWatchlist] = useState(false);
     const [error, setError] = useState("");
 
     useEffect(() => {
@@ -137,38 +133,53 @@ function StockDetails() {
     }, [decodedSymbol, navigate]);
 
 
-    useEffect(() => {
-        if (!stock) {
-            setIsInWatchlist(false);
-            return;
-        }
 
-        setIsInWatchlist(
-            getWatchlist().some(
-                (item) => item.symbol === stock.symbol
-            )
-        );
-    }, [stock?.symbol]);
-    const handleWatchlistToggle = () => {
+    const {
+        isFavourite,
+        addFavourite,
+        removeFavourite,
+        isAdding,
+        isRemoving,
+    } = useFavourites();
+
+    const { user } = useAuth();
+
+    const isInWatchlist = stock
+        ? isFavourite(stock.symbol)
+        : false;
+
+    const handleWatchlistToggle = async () => {
         if (!stock) return;
 
-        if (isInWatchlist) {
-            removeFromWatchlist(stock.symbol);
-            setIsInWatchlist(false);
+        // Require login before modifying the watchlist.
+        if (!user) {
+            navigate(
+                `/login?redirect=${encodeURIComponent(
+                    `/stock/${encodeURIComponent(stock.symbol)}`
+                )}`
+            );
             return;
         }
 
-        addToWatchlist({
-            symbol: stock.symbol,
-            name: stock.name || stock.symbol,
-            exchange:
-                stock.exchange ||
-                stock.symbol.split(".").pop() ||
-                "",
-        });
-
-        setIsInWatchlist(true);
+        try {
+            if (isInWatchlist) {
+                await removeFavourite(stock.symbol);
+            } else {
+                await addFavourite({
+                    symbol: stock.symbol,
+                    name: stock.name || stock.symbol,
+                    exchange:
+                        stock.exchange ||
+                        stock.symbol.split(".").pop() ||
+                        "",
+                });
+            }
+        } catch (err) {
+            console.error("Failed to update watchlist:", err);
+            setError("Unable to update watchlist. Please try again.");
+        }
     };
+
     const handlePeriodChange = async (
         period: StockPeriod
     ) => {
@@ -421,18 +432,22 @@ function StockDetails() {
                         <div className="flex flex-wrap items-center gap-3 self-start md:self-auto">
                             <button
                                 onClick={handleWatchlistToggle}
-                                className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${isInWatchlist
-                                    ? "border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"
-                                    : "bg-amber-500 text-white hover:bg-amber-600"
+                                disabled={isAdding || isRemoving}
+                                className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${isInWatchlist
+                                        ? "border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                                        : "bg-amber-500 text-white hover:bg-amber-600"
                                     }`}
                             >
                                 <Star
                                     size={16}
                                     fill={isInWatchlist ? "currentColor" : "none"}
                                 />
-                                {isInWatchlist
-                                    ? "Remove from Watchlist"
-                                    : "Add to Watchlist"}
+
+                                {isAdding || isRemoving
+                                    ? "Updating..."
+                                    : isInWatchlist
+                                        ? "Remove from Watchlist"
+                                        : "Add to Watchlist"}
                             </button>
 
                             <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">

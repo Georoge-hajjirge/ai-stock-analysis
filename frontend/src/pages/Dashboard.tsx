@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import {
     ArrowRight,
@@ -13,45 +14,50 @@ import { searchStocks } from "../services/stockService";
 import type { StockSearchResult } from "../types/stock";
 
 const popularStocks = [
-    {
-        symbol: "TCS.NS",
-        name: "Tata Consultancy Services",
-    },
-    {
-        symbol: "INFY.NS",
-        name: "Infosys",
-    },
-    {
-        symbol: "RELIANCE.NS",
-        name: "Reliance Industries",
-    },
-    {
-        symbol: "HDFCBANK.NS",
-        name: "HDFC Bank",
-    },
+    { symbol: "TCS.NS", name: "Tata Consultancy Services" },
+    { symbol: "INFY.NS", name: "Infosys" },
+    { symbol: "RELIANCE.NS", name: "Reliance Industries" },
+    { symbol: "HDFCBANK.NS", name: "HDFC Bank" },
 ];
 
 function Dashboard() {
     const navigate = useNavigate();
 
-    const [query, setQuery] = useState("");
-    const [results, setResults] = useState<StockSearchResult[]>([]);
+    const [query, setQuery] = useState(
+        () => sessionStorage.getItem("stockSearchQuery") ?? ""
+    );
+
+    const [results, setResults] = useState<StockSearchResult[]>(() => {
+        try {
+            return JSON.parse(
+                sessionStorage.getItem("stockSearchResults") ?? "[]"
+            ) as StockSearchResult[];
+        } catch {
+            return [];
+        }
+    });
+
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
 
     const handleSearch = async () => {
-        if (!query.trim()) return;
+        const searchQuery = query.trim();
+        if (!searchQuery || loading) return;
 
         try {
             setLoading(true);
             setError("");
+            sessionStorage.setItem("stockSearchQuery", searchQuery);
 
-            const data = await searchStocks(query.trim());
+            const data = await searchStocks(searchQuery);
 
             setResults(data);
+            sessionStorage.setItem(
+                "stockSearchResults",
+                JSON.stringify(data)
+            );
         } catch (err) {
             console.error(err);
-            setResults([]);
             setError("Unable to search stocks. Please try again.");
         } finally {
             setLoading(false);
@@ -66,25 +72,40 @@ function Dashboard() {
         navigate(`/stock/${encodeURIComponent(symbol)}`);
     };
 
+    const nseResults = results.filter((stock) =>
+        stock.symbol.endsWith(".NS")
+    );
+
+    const bseResults = results.filter((stock) =>
+        stock.symbol.endsWith(".BO")
+    );
+
+    const otherResults = results.filter(
+        (stock) =>
+            !stock.symbol.endsWith(".NS") &&
+            !stock.symbol.endsWith(".BO")
+    );
+
     return (
         <div className="min-h-screen bg-slate-50">
             <Header />
 
             <main>
-                <section className="relative overflow-hidden border-b border-slate-200 bg-white">
-                    <div className="mx-auto max-w-7xl px-5 pb-20 pt-16 lg:px-8 lg:pb-24 lg:pt-24">
+                {/* Hero and stock search */}
+                <section className="border-b border-slate-200 bg-white">
+                    <div className="mx-auto max-w-7xl px-5 pb-12 pt-16 lg:px-8 lg:pb-16 lg:pt-24">
                         <div className="mx-auto max-w-3xl text-center">
                             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700">
                                 <Sparkles size={14} />
                                 AI-powered stock analysis
                             </div>
 
-                            <h2 className="text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl">
+                            <h1 className="text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl">
                                 Understand the market
                                 <span className="block text-blue-600">
                                     with intelligent insights.
                                 </span>
-                            </h2>
+                            </h1>
 
                             <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-slate-500 sm:text-lg">
                                 Search NSE and BSE stocks to explore market
@@ -101,9 +122,14 @@ function Dashboard() {
 
                                     <input
                                         value={query}
-                                        onChange={(event) =>
-                                            setQuery(event.target.value)
-                                        }
+                                        onChange={(event) => {
+                                            const value = event.target.value;
+                                            setQuery(value);
+                                            sessionStorage.setItem(
+                                                "stockSearchQuery",
+                                                value
+                                            );
+                                        }}
                                         onKeyDown={(event) => {
                                             if (event.key === "Enter") {
                                                 handleSearch();
@@ -123,7 +149,10 @@ function Dashboard() {
                                 </div>
 
                                 {error && (
-                                    <p className="mt-3 text-sm font-medium text-red-600">
+                                    <p
+                                        role="alert"
+                                        className="mt-3 text-sm font-medium text-red-600"
+                                    >
                                         {error}
                                     </p>
                                 )}
@@ -132,12 +161,89 @@ function Dashboard() {
                     </div>
                 </section>
 
+                {/* Search results: NSE and BSE side by side */}
+                {results.length > 0 && (
+                    <section className="mx-auto max-w-7xl px-5 py-10 lg:px-8">
+                        <div className="mb-6">
+                            <h2 className="text-2xl font-bold text-slate-950">
+                                Search Results
+                            </h2>
+                            <p className="mt-1 text-sm text-slate-500">
+                                Explore matching stocks across Indian exchanges.
+                            </p>
+                        </div>
+
+                        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+                            {nseResults.length > 0 && (
+                                <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                                    <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-5 py-4">
+                                        <div>
+                                            <h3 className="text-lg font-bold text-slate-900">
+                                                NSE Stocks
+                                            </h3>
+                                            <p className="mt-1 text-sm text-slate-500">
+                                                National Stock Exchange
+                                            </p>
+                                        </div>
+
+                                        <span className="rounded-full bg-blue-100 px-3 py-1 text-sm font-semibold text-blue-700">
+                                            {nseResults.length} stocks
+                                        </span>
+                                    </div>
+
+                                    <div className="p-4">
+                                        <SearchResults
+                                            results={nseResults}
+                                            onSelect={handleSelect}
+                                        />
+                                    </div>
+                                </section>
+                            )}
+
+                            {bseResults.length > 0 && (
+                                <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                                    <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-5 py-4">
+                                        <div>
+                                            <h3 className="text-lg font-bold text-slate-900">
+                                                BSE Stocks
+                                            </h3>
+                                            <p className="mt-1 text-sm text-slate-500">
+                                                Bombay Stock Exchange
+                                            </p>
+                                        </div>
+
+                                        <span className="rounded-full bg-purple-100 px-3 py-1 text-sm font-semibold text-purple-700">
+                                            {bseResults.length} stocks
+                                        </span>
+                                    </div>
+
+                                    <div className="p-4">
+                                        <SearchResults
+                                            results={bseResults}
+                                            onSelect={handleSelect}
+                                        />
+                                    </div>
+                                </section>
+                            )}
+
+                            {otherResults.length > 0 && (
+                                <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                                    <SearchResults
+                                        results={otherResults}
+                                        onSelect={handleSelect}
+                                    />
+                                </section>
+                            )}
+                        </div>
+                    </section>
+                )}
+
+                {/* Popular stocks and investor intelligence */}
                 <section className="mx-auto max-w-7xl px-5 py-10 lg:px-8">
                     <div className="mb-5">
-                        <h3 className="section-title">
+                        <h2 className="section-title">
                             Popular Indian stocks
-                        </h3>
-
+                        </h2>
                         <p className="section-description">
                             Quickly explore some commonly tracked companies.
                         </p>
@@ -174,9 +280,12 @@ function Dashboard() {
                             </button>
                         ))}
                     </div>
+
                     <div className="mt-8">
                         <button
-                            onClick={() => navigate("/investor-intelligence")}
+                            onClick={() =>
+                                navigate("/investor-intelligence")
+                            }
                             className="group flex w-full flex-col gap-5 rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50 via-white to-indigo-50 p-6 text-left shadow-sm transition hover:border-blue-300 hover:shadow-md sm:flex-row sm:items-center sm:justify-between sm:p-8"
                         >
                             <div className="flex items-start gap-4">
@@ -189,14 +298,15 @@ function Dashboard() {
                                         Investor Research
                                     </p>
 
-                                    <h3 className="mt-1 text-xl font-bold text-slate-950">
+                                    <h2 className="mt-1 text-xl font-bold text-slate-950">
                                         Investor Intelligence
-                                    </h3>
+                                    </h2>
 
                                     <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                                        Explore foreign investor activity, mutual fund holdings,
-                                        ownership patterns, disclosed deals and
-                                        insider trades across companies in the Indian market.
+                                        Explore foreign investor activity,
+                                        mutual fund holdings, ownership patterns,
+                                        disclosed deals and insider trades
+                                        across companies in the Indian market.
                                     </p>
                                 </div>
                             </div>
@@ -206,12 +316,6 @@ function Dashboard() {
                                 <ArrowRight size={18} />
                             </span>
                         </button>
-                    </div>
-                    <div className="mt-10">
-                        <SearchResults
-                            results={results}
-                            onSelect={handleSelect}
-                        />
                     </div>
                 </section>
             </main>

@@ -64,7 +64,26 @@ const dateFormat = (value?: string) => {
         timeZone: "UTC",
     });
 };
+const fiscalYearStart = (fy?: string) => {
+    const match = fy?.match(/^(\d{4})-\d{2,4}$/);
+    return match ? Number(match[1]) : null;
+};
 
+const fiscalYearRange = (fy?: string) => {
+    const start = fiscalYearStart(fy);
+    return start ? `Apr ${start} – Mar ${start + 1}` : "-";
+};
+
+const monthsSinceFiscalYearEnd = (fy?: string, asOf?: string) => {
+    const start = fiscalYearStart(fy);
+    if (!start || !asOf) return null;
+
+    const fyEnd = Date.UTC(start + 1, 2, 31); // 31 March
+    const asOfTime = new Date(asOf).getTime();
+    if (Number.isNaN(asOfTime) || asOfTime < fyEnd) return null;
+
+    return Math.round((asOfTime - fyEnd) / (1000 * 60 * 60 * 24 * 30.44));
+};
 function FundamentalsPanel({ data }: FundamentalsPanelProps) {
     if (!data) {
         return (
@@ -168,23 +187,10 @@ function FundamentalsPanel({ data }: FundamentalsPanelProps) {
         },
     ];
 
-    const details = [
-        {
-            label: "As of Date",
-            value: dateFormat(data.asOfDate),
-            icon: CalendarDays,
-        },
-        {
-            label: "Financial Period",
-            value: data.financialsPeriodType || "-",
-            icon: CalendarDays,
-        },
-        {
-            label: "Fiscal Year",
-            value: data.financialsFiscalYear || "-",
-            icon: Layers,
-        },
-    ];
+    const gapMonths = monthsSinceFiscalYearEnd(
+        data.financialsFiscalYear,
+        data.asOfDate
+    );
 
     return (
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -246,45 +252,61 @@ function FundamentalsPanel({ data }: FundamentalsPanelProps) {
                 })}
             </div>
 
-            <div className="border-t border-slate-100 bg-slate-50/70 px-6 py-4 sm:px-7">
-                <div className="mb-3 flex items-center gap-2">
-                    <CalendarDays size={16} className="text-slate-500" />
-                    <h3 className="text-sm font-semibold text-slate-700">
-                        Reporting Information
-                    </h3>
+            <div className="border-t border-slate-100 bg-slate-50/70 px-6 py-5 sm:px-7">
+                <div className="mb-4">
+                    <div className="flex items-center gap-2">
+                        <CalendarDays size={16} className="text-slate-500" />
+                        <h3 className="text-sm font-semibold text-slate-700">
+                            Data freshness
+                        </h3>
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">
+                        The numbers above come from two different dates.
+                    </p>
                 </div>
 
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    {details.map((item) => {
-                        const Icon = item.icon;
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div className="rounded-xl border border-teal-200 bg-teal-50 p-4">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">
+                            Company results (older)
+                        </p>
+                        <p className="mt-2 text-base font-bold capitalize text-teal-950">
+                            {data.financialsPeriodType || "-"} report · FY{" "}
+                            {data.financialsFiscalYear || "-"}
+                        </p>
+                        <p className="mt-1 text-sm text-teal-800">
+                            {fiscalYearRange(data.financialsFiscalYear)}
+                        </p>
+                        <p className="mt-3 text-xs text-teal-700">
+                            Used for: EPS, Book Value, ROE, ROCE
+                        </p>
+                    </div>
 
-                        return (
-                            <div
-                                key={item.label}
-                                className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-3"
-                            >
-                                <Icon
-                                    size={16}
-                                    className="mt-0.5 shrink-0 text-slate-400"
-                                />
-                                <div className="min-w-0">
-                                    <p className="text-xs text-slate-500">
-                                        {item.label}
-                                    </p>
-                                    <p className="mt-1 break-words text-sm font-semibold capitalize text-slate-800">
-                                        {item.value}
-                                    </p>
-                                </div>
-                            </div>
-                        );
-                    })}
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+                            Market price (latest)
+                        </p>
+                        <p className="mt-2 text-base font-bold text-amber-950">
+                            {dateFormat(data.asOfDate)}
+                        </p>
+                        <p className="mt-1 text-sm text-amber-800">Price snapshot date</p>
+                        <p className="mt-3 text-xs text-amber-700">
+                            Used for: Price, Market Cap, 52W High/Low
+                        </p>
+                    </div>
                 </div>
 
-                <p className="mt-4 text-xs leading-5 text-slate-500">
-                    Values are provided by the available market-data source.
-                    Missing values are displayed as unavailable rather than
-                    estimated. Financial reporting dates may differ from
-                    the latest market price date.
+                {gapMonths !== null && gapMonths > 0 && (
+                    <p className="mt-4 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-5 text-slate-600">
+                        The financials end about{" "}
+                        <span className="font-semibold">{gapMonths} months</span> before
+                        the price date. Ratios like P/E mix today's price with older
+                        earnings.
+                    </p>
+                )}
+
+                <p className="mt-3 text-xs leading-5 text-slate-500">
+                    Missing values are shown as "-" instead of being estimated.
                 </p>
             </div>
         </section>

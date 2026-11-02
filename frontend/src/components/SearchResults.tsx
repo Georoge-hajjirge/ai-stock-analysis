@@ -9,7 +9,7 @@ function SearchResults({ results, onSelect }: SearchResultsProps) {
     if (results.length === 0) return null;
 
     return (
-        <div className="mt-6 w-full max-w-2xl">
+        <div className="w-full">
             <h2 className="mb-3 text-lg font-semibold">Search Results</h2>
 
             <div className="space-y-2">
