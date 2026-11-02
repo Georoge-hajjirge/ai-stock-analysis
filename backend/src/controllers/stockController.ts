@@ -105,6 +105,8 @@ export const getHistoricalStockController = async (
             "1M",
             "6M",
             "1Y",
+            "5Y",
+            "ALL",
         ];
 
         const period = validPeriods.includes(

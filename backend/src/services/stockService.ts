@@ -47,7 +47,7 @@ export interface HistoricalStockData {
     volume?: number;
 }
 
-export type StockPeriod = "1D" | "1W" | "1M" | "6M" | "1Y";
+export type StockPeriod = "1D" | "1W" | "1M" | "6M" | "1Y" | "5Y" | "ALL";
 export interface StockFundamentals {
     symbol: string;
     price?: number;
@@ -68,7 +68,6 @@ export interface StockFundamentals {
     financialsFiscalYear?: string;
 }
 
-
 const getPeriodConfig = (period: StockPeriod) => {
     switch (period) {
         case "1D":
@@ -81,6 +80,10 @@ const getPeriodConfig = (period: StockPeriod) => {
             return { range: "6mo", interval: "1d" };
         case "1Y":
             return { range: "1y", interval: "1d" };
+        case "5Y":
+            return { range: "5y", interval: "1wk" };
+        case "ALL":
+            return { range: "max", interval: "1mo" };
         default:
             return { range: "1mo", interval: "1d" };
     }
@@ -246,7 +249,35 @@ export const getStockData = async (
         );
     }
 };
+const groupByMonth = (
+    data: HistoricalStockData[]
+): HistoricalStockData[] => {
+    const IST_OFFSET_SECONDS = 19800; // UTC+5:30
+    const groups = new Map<string, HistoricalStockData>();
 
+    const maxOf = (a?: number, b?: number) =>
+        a == null ? b : b == null ? a : Math.max(a, b);
+    const minOf = (a?: number, b?: number) =>
+        a == null ? b : b == null ? a : Math.min(a, b);
+
+    for (const item of data) {
+        const d = new Date((item.timestamp + IST_OFFSET_SECONDS) * 1000);
+        const key = `${d.getUTCFullYear()}-${d.getUTCMonth()}`;
+        const existing = groups.get(key);
+
+        if (!existing) {
+            groups.set(key, { ...item });
+            continue;
+        }
+
+        existing.high = maxOf(existing.high, item.high);
+        existing.low = minOf(existing.low, item.low);
+        existing.close = item.close;
+        existing.volume = (existing.volume ?? 0) + (item.volume ?? 0);
+    }
+
+    return Array.from(groups.values());
+};
 export const getHistoricalData = async (
     symbol: string,
     period: StockPeriod = "1M"
@@ -283,7 +314,7 @@ export const getHistoricalData = async (
         const timestamps: number[] = result.timestamp || [];
         const quote = result.indicators?.quote?.[0] || {};
 
-        return timestamps
+        const mapped = timestamps
             .map((timestamp: number, index: number) => ({
                 timestamp,
                 date: new Date(timestamp * 1000).toISOString(),
@@ -293,9 +324,9 @@ export const getHistoricalData = async (
                 close: quote.close?.[index],
                 volume: quote.volume?.[index],
             }))
-            .filter(
-                (item: HistoricalStockData) => item.close != null
-            );
+            .filter((item: HistoricalStockData) => item.close != null);
+
+        return period === "ALL" ? groupByMonth(mapped) : mapped;
     } catch (error: unknown) {
         if (axios.isAxiosError(error)) {
             console.error(

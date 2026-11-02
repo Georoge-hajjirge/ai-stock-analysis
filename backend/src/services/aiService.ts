@@ -1,6 +1,6 @@
 
 import { GoogleGenAI } from "@google/genai";
-import type { NewsArticle } from "./newsService.js";
+import type { NewsArticle, NewsCandidate, NewsCategory, NewsImportance } from "./newsService.js";
 import type {
     HistoricalStockData,
     StockData,
@@ -18,6 +18,198 @@ if (!apiKey) {
 }
 
 const ai = new GoogleGenAI({ apiKey });
+
+
+
+
+
+
+interface AnalyzeStockNewsInput {
+    symbol: string;
+    companyName: string;
+    articles: NewsCandidate[];
+}
+
+export const analyzeStockNews = async (
+    input: AnalyzeStockNewsInput
+): Promise<NewsArticle[]> => {
+    if (input.articles.length === 0) {
+        return [];
+    }
+
+    const articlesForAI = input.articles.map((article, id) => ({
+        id,
+        title: article.title,
+        description: article.description,
+        source: article.source,
+        publishedAt: article.publishedAt,
+    }));
+
+    const prompt = `
+You are a financial news analyst evaluating news for one specific stock.
+
+Stock symbol: ${input.symbol}
+Company name: ${input.companyName}
+
+Analyze the supplied articles and return ONLY valid JSON in this format:
+{
+  "articles": [
+    {
+      "id": 0,
+      "category": "company",
+      "importance": "high",
+      "impact": "positive",
+      "reason": "Short explanation of the article's relevance to this stock.",
+      "relevanceScore": 90
+    }
+  ]
+}
+
+Rules:
+
+1. Only return articles that have a meaningful, explainable connection
+   to ${input.companyName} (${input.symbol}) or could reasonably affect
+   this specific stock.
+2. Exclude unrelated articles, even if they mention the economy, markets,
+   government, or another company.
+3. Category must be exactly one of:
+   - "company": company-specific results, contracts, management,
+     operations, products, competitors, or business developments.
+   - "government": government policy, RBI, SEBI, taxation, legislation,
+     or regulatory actions relevant to this stock.
+   - "global": international markets, global economic conditions,
+     geopolitical events, commodities, or overseas developments
+     that could affect this stock.
+4. Importance must be "high" or "normal".
+   Use "high" only when the article could materially affect the company,
+   its valuation, operations, financial results, or stock price.
+   Do not classify news as high merely because it sounds dramatic.
+5. Impact must be "positive", "negative", "mixed", or "uncertain".
+   Assess the likely impact on this specific stock, not the general
+   tone of the article. Use "uncertain" when evidence is insufficient.
+6. The reason must briefly explain the connection to this stock.
+   Do not invent facts or claim an impact that the article does not support.
+7. relevanceScore must be an integer from 0 to 100:
+   90-100: directly and strongly relevant;
+   75-89: clearly relevant;
+   60-74: plausible and explainable relevance;
+   below 60: weak or unrelated.
+8. Return only articles with relevanceScore >= 60.
+9. Use each article's original id exactly. Never invent an article or id.
+10. If an article's connection to this stock is unclear, exclude it.
+11. Return an empty articles array if none qualify.
+12. Do not provide investment advice or buy/sell recommendations.
+
+Articles:
+${JSON.stringify(articlesForAI)}
+`;
+
+    const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: prompt,
+        config: {
+            responseMimeType: "application/json",
+            maxOutputTokens: 6000,
+        },
+    });
+
+    const responseText = response.text?.trim();
+
+    if (!responseText) {
+        console.error("Gemini returned an empty news analysis response.");
+        return [];
+    }
+
+    let parsed: {
+        articles?: Array<{
+            id?: number;
+            category?: string;
+            importance?: string;
+            impact?: string;
+            reason?: string;
+            relevanceScore?: number;
+        }>;
+    };
+
+    try {
+        parsed = JSON.parse(responseText);
+    } catch (error) {
+        console.error("Failed to parse Gemini news analysis JSON.", {
+            error,
+            responseLength: responseText.length,
+            responsePreview: responseText.slice(0, 500),
+            responseEnding: responseText.slice(-300),
+        });
+
+        throw new Error(
+            "Gemini returned incomplete or invalid JSON for stock news analysis."
+        );
+    }
+
+    if (!Array.isArray(parsed.articles)) {
+        console.error("Gemini response does not contain an articles array.");
+        return [];
+    }
+
+    const validCategories = new Set([
+        "company",
+        "government",
+        "global",
+    ]);
+
+    const validImportance = new Set(["high", "normal"]);
+
+    const validImpacts = new Set([
+        "positive",
+        "negative",
+        "mixed",
+        "uncertain",
+    ]);
+
+    const analyzed: NewsArticle[] = [];
+
+    for (const item of parsed.articles) {
+        if (
+            typeof item.id !== "number" ||
+            !Number.isInteger(item.id) ||
+            item.id < 0 ||
+            item.id >= input.articles.length
+        ) {
+            continue;
+        }
+
+        if (
+            !validCategories.has(item.category ?? "") ||
+            !validImportance.has(item.importance ?? "") ||
+            !validImpacts.has(item.impact ?? "") ||
+            typeof item.reason !== "string" ||
+            !item.reason.trim() ||
+            typeof item.relevanceScore !== "number" ||
+            !Number.isFinite(item.relevanceScore) ||
+            item.relevanceScore < 60 ||
+            item.relevanceScore > 100
+        ) {
+            continue;
+        }
+
+        const originalArticle = input.articles[item.id];
+
+        analyzed.push({
+            ...originalArticle,
+            category: item.category as NewsArticle["category"],
+            importance: item.importance as NewsArticle["importance"],
+            impact: item.impact as NewsArticle["impact"],
+            reason: item.reason.trim(),
+            relevanceScore: Math.round(item.relevanceScore),
+        });
+    }
+
+    // Prevent duplicate IDs in Gemini's response from duplicating articles.
+    return Array.from(
+        new Map(analyzed.map((article) => [article.url, article])).values()
+    );
+};
+
 
 interface AIStockAnalysisInput {
     stock: StockData;
