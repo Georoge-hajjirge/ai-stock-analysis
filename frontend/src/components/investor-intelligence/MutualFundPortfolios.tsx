@@ -7,6 +7,7 @@ import {
     type MutualFundHoldingsResponse,
     type MutualFundScheme,
 } from "../../services/investorIntelligenceApi";
+import { useNavigate } from "react-router-dom";
 
 function formatNumber(value: number | null | undefined) {
     if (value == null || !Number.isFinite(value)) return "—";
@@ -91,6 +92,23 @@ export default function MutualFundPortfolios() {
     const [holdingsLoading, setHoldingsLoading] = useState(false);
     const [schemesError, setSchemesError] = useState("");
     const [holdingsError, setHoldingsError] = useState("");
+
+    const navigate = useNavigate();
+
+    const handleHoldingClick = (symbol?: string | null) => {
+        if (!symbol) return;
+
+        const normalizedSymbol = symbol.trim().toUpperCase();
+
+        // Add the NSE suffix when the symbol has no exchange suffix.
+        const stockSymbol =
+            normalizedSymbol.endsWith(".NS") ||
+                normalizedSymbol.endsWith(".BO")
+                ? normalizedSymbol
+                : `${normalizedSymbol}.NS`;
+
+        navigate(`/stock/${encodeURIComponent(stockSymbol)}`);
+    };
 
     const loadSchemes = useCallback(async (query: string) => {
         setSchemesLoading(true);
@@ -375,7 +393,12 @@ export default function MutualFundPortfolios() {
                                                     {holdings.map((holding, index) => (
                                                         <tr
                                                             key={`${holding.isin ?? holding.symbol ?? holding.companyName ?? "holding"}-${index}`}
-                                                            className="hover:bg-slate-50"
+                                                            onClick={() => handleHoldingClick(holding.symbol)}
+                                                            className={`transition-colors ${holding.symbol
+                                                                ? "cursor-pointer hover:bg-blue-50"
+                                                                : "hover:bg-slate-50"
+                                                                }`}
+                                                            title={holding.symbol ? "View stock details" : undefined}
                                                         >
                                                             <td className="px-4 py-3">
                                                                 <span className="block font-medium text-slate-900">

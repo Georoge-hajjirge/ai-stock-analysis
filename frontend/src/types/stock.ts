@@ -39,7 +39,9 @@ export type StockPeriod =
     | "1W"
     | "1M"
     | "6M"
-    | "1Y";
+    | "1Y"
+    | "5Y"
+    | "ALL";
 
 export interface StockFundamentals {
     symbol: string;
@@ -61,14 +63,26 @@ export interface StockFundamentals {
     financialsFiscalYear?: string;
 }
 
+
+
+export type NewsCategory = "company" | "government" | "global";
+export type NewsImportance = "high" | "normal";
+export type NewsImpact = "positive" | "negative" | "mixed" | "uncertain";
+
 export interface NewsArticle {
     title: string;
-    description?: string;
+    description: string;
     url: string;
     source: string;
     publishedAt: string;
     imageUrl?: string;
+    category: NewsCategory;
+    importance: NewsImportance;
+    impact: NewsImpact;
+    reason: string;
+    relevanceScore: number;
 }
+
 
 export interface WatchlistItem {
     symbol: string;

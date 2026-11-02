@@ -19,7 +19,20 @@ interface HistoricalChartProps {
     loading: boolean;
 }
 
-const periods: StockPeriod[] = ["1D", "1W", "1M", "6M", "1Y"];
+const periods: StockPeriod[] = ["1D", "1W", "1M", "6M", "1Y", "5Y", "ALL"];
+
+const periodLabels: Record<StockPeriod, string> = {
+    "1D": "1D",
+    "1W": "1W",
+    "1M": "1M",
+    "6M": "6M",
+    "1Y": "1Y",
+    "5Y": "5Y",
+    "ALL": "All",
+};
+
+const isLongPeriod = (period: StockPeriod) =>
+    period === "1Y" || period === "5Y" || period === "ALL";
 
 function HistoricalChart({
     data,
@@ -28,12 +41,19 @@ function HistoricalChart({
     loading,
 }: HistoricalChartProps) {
     const chartData = data
-        .filter((item) => item.close !== undefined)
+        .filter((item) => item.close != null)
         .map((item) => ({
             ...item,
-            displayDate: new Date(item.date).toLocaleDateString("en-IN", {
+            displayDate: new Date(item.date).toLocaleDateString(
+                "en-IN",
+                isLongPeriod(period)
+                    ? { month: "short", year: "2-digit" }
+                    : { day: "2-digit", month: "short" }
+            ),
+            fullDate: new Date(item.date).toLocaleDateString("en-IN", {
                 day: "2-digit",
                 month: "short",
+                year: "numeric",
             }),
         }));
 
@@ -51,7 +71,7 @@ function HistoricalChart({
                         </p>
                     </div>
 
-                    <div className="flex rounded-xl bg-slate-100 p-1">
+                    <div className="flex max-w-full overflow-x-auto rounded-xl bg-slate-100 p-1">
                         {periods.map((item) => (
                             <button
                                 key={item}
@@ -59,14 +79,14 @@ function HistoricalChart({
                                 onClick={() => onPeriodChange(item)}
                                 disabled={loading}
                                 className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition sm:px-4 ${period === item
-                                        ? "bg-white text-slate-950 shadow-sm"
-                                        : "text-slate-500 hover:text-slate-900"
+                                    ? "bg-white text-slate-950 shadow-sm"
+                                    : "text-slate-500 hover:text-slate-900"
                                     } ${loading
                                         ? "cursor-not-allowed opacity-50"
                                         : ""
                                     }`}
                             >
-                                {item}
+                                {periodLabels[item]}
                             </button>
                         ))}
                     </div>
@@ -92,10 +112,7 @@ function HistoricalChart({
                     </div>
                 ) : (
                     <div className="h-[350px] w-full">
-                        <ResponsiveContainer
-                            width="100%"
-                            height="100%"
-                        >
+                        <ResponsiveContainer width="100%" height="100%">
                             <LineChart
                                 data={chartData}
                                 margin={{
@@ -112,18 +129,15 @@ function HistoricalChart({
 
                                 <XAxis
                                     dataKey="displayDate"
-                                    tick={{
-                                        fontSize: 11,
-                                    }}
+                                    tick={{ fontSize: 11 }}
                                     tickLine={false}
                                     axisLine={false}
+                                    minTickGap={40}
                                 />
 
                                 <YAxis
                                     domain={["auto", "auto"]}
-                                    tick={{
-                                        fontSize: 11,
-                                    }}
+                                    tick={{ fontSize: 11 }}
                                     tickFormatter={(value) =>
                                         `₹${Number(value).toFixed(0)}`
                                     }
@@ -137,8 +151,8 @@ function HistoricalChart({
                                         `₹${Number(value).toFixed(2)}`,
                                         "Close",
                                     ]}
-                                    labelFormatter={(label) =>
-                                        `Date: ${label}`
+                                    labelFormatter={(_, payload) =>
+                                        payload?.[0]?.payload?.fullDate ?? ""
                                     }
                                 />
 
@@ -147,9 +161,7 @@ function HistoricalChart({
                                     dataKey="close"
                                     strokeWidth={2.5}
                                     dot={false}
-                                    activeDot={{
-                                        r: 5,
-                                    }}
+                                    activeDot={{ r: 5 }}
                                 />
                             </LineChart>
                         </ResponsiveContainer>
