@@ -36,14 +36,18 @@ import type {
     NewsArticle,
 } from "../types/stock";
 import Header from "../components/Header";
+import { getInternationalFundamentals, getInternationalHistoricalData, getInternationalStockData } from "../services/internationalStockService";
 
 function StockDetails() {
     const navigate = useNavigate();
     const { symbol } = useParams<{ symbol: string }>();
-
     const decodedSymbol = symbol
         ? decodeURIComponent(symbol)
         : "";
+    const isInternationalStock =
+        decodedSymbol !== "" &&
+        !decodedSymbol.endsWith(".NS") &&
+        !decodedSymbol.endsWith(".BO");
 
     const [stock, setStock] = useState<StockData | null>(null);
 
@@ -65,11 +69,50 @@ function StockDetails() {
     const [questionLoading, setQuestionLoading] = useState(false);
 
     const [analysis, setAnalysis] = useState("");
-
     const [question, setQuestion] = useState("");
-
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [error, setError] = useState("");
+
+    const loadStock = async () => {
+        try {
+            setLoading(true);
+            setNewsLoading(true);
+            setError("");
+
+            const [
+                stockData,
+                history,
+                fundamentalsData,
+                newsData,
+            ] = await Promise.all([
+                isInternationalStock
+                    ? getInternationalStockData(decodedSymbol)
+                    : getStockData(decodedSymbol),
+
+                isInternationalStock
+                    ? getInternationalHistoricalData(decodedSymbol, selectedPeriod)
+                    : getHistoricalData(decodedSymbol, selectedPeriod),
+
+                isInternationalStock
+                    ? getInternationalFundamentals(decodedSymbol).catch(() => null)
+                    : getFundamentals(decodedSymbol).catch(() => null),
+
+                getStockNews(decodedSymbol).catch(() => []),
+            ]);
+
+            setStock(stockData);
+            setHistoricalData(history);
+            setFundamentals(fundamentalsData);
+            setNews(newsData);
+        } catch (err) {
+            console.error("Failed to load stock details:", err);
+            setError("Unable to load stock information. Please try again.");
+            setStock(null);
+        } finally {
+            setLoading(false);
+            setNewsLoading(false);
+        }
+    };
 
     useEffect(() => {
         if (!decodedSymbol) {
@@ -77,61 +120,8 @@ function StockDetails() {
             return;
         }
 
-        const loadStock = async () => {
-            try {
-                setLoading(true);
-                setNewsLoading(true);
-                setError("");
-
-                setStock(null);
-                setFundamentals(null);
-                setHistoricalData([]);
-                setNews([]);
-                setAnalysis("");
-                setQuestion("");
-                setMessages([]);
-
-                const [
-                    stockData,
-                    history,
-                    fundamentalsData,
-                    newsData,
-                ] = await Promise.all([
-                    getStockData(decodedSymbol),
-
-                    getHistoricalData(
-                        decodedSymbol,
-                        selectedPeriod
-                    ),
-
-                    getFundamentals(decodedSymbol).catch(
-                        () => null
-                    ),
-
-                    getStockNews(decodedSymbol).catch(
-                        () => []
-                    ),
-                ]);
-
-                setStock(stockData);
-                setHistoricalData(history);
-                setFundamentals(fundamentalsData);
-                setNews(newsData);
-            } catch (err) {
-                console.error(err);
-
-                setError(
-                    "Unable to load stock information. Please try again."
-                );
-            } finally {
-                setLoading(false);
-                setNewsLoading(false);
-            }
-        };
-
         loadStock();
     }, [decodedSymbol, navigate]);
-
 
 
     const {
@@ -180,28 +170,25 @@ function StockDetails() {
         }
     };
 
-    const handlePeriodChange = async (
-        period: StockPeriod
-    ) => {
+    const handlePeriodChange = async (period: StockPeriod) => {
         if (!stock) return;
-
+        if (isInternationalStock) {
+            setError("AI analysis is currently available for Indian stocks only.");
+            return;
+        }
         try {
             setSelectedPeriod(period);
             setHistoryLoading(true);
             setError("");
 
-            const history = await getHistoricalData(
-                stock.symbol,
-                period
-            );
+            const history = isInternationalStock
+                ? await getInternationalHistoricalData(stock.symbol, period)
+                : await getHistoricalData(stock.symbol, period);
 
             setHistoricalData(history);
         } catch (err) {
-            console.error(err);
-
-            setError(
-                "Unable to load historical price data."
-            );
+            console.error("Failed to load historical data:", err);
+            setError("Unable to load historical price data.");
         } finally {
             setHistoryLoading(false);
         }
@@ -209,7 +196,10 @@ function StockDetails() {
 
     const handleGenerateAnalysis = async () => {
         if (!stock) return;
-
+        if (isInternationalStock) {
+            setError("AI analysis is currently available for Indian stocks only.");
+            return;
+        }
         try {
             setAnalysisLoading(true);
             setError("");
@@ -434,8 +424,8 @@ function StockDetails() {
                                 onClick={handleWatchlistToggle}
                                 disabled={isAdding || isRemoving}
                                 className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${isInWatchlist
-                                        ? "border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"
-                                        : "bg-amber-500 text-white hover:bg-amber-600"
+                                    ? "border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                                    : "bg-amber-500 text-white hover:bg-amber-600"
                                     }`}
                             >
                                 <Star

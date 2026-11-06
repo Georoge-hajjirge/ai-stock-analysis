@@ -2,8 +2,10 @@
 import axios from "axios";
 import { getStockData } from "./stockService.js";
 import { analyzeStockNews } from "./aiService.js";
+import { getInternationalStockData } from "./internationalStockService.js";
+import { NewsArticle, NewsCandidate } from "../types/news.js";
 
-const NEWS_API_URL = "https://newsapi.org/v2/everything";
+const NEWS_API_URL = process.env.NEWS_API_URL || `https://newsapi.org/v2/everything`;
 const newsApiKey = process.env.NEWS_API_KEY;
 
 const DEFAULT_DOMAINS = [
@@ -46,6 +48,22 @@ const MACRO_NEWS_TERMS = [
     '"global demand"',
 ];
 
+const INTERNATIONAL_MACRO_NEWS_TERMS = [
+    '"Federal Reserve"',
+    '"European Central Bank"',
+    '"Bank of England"',
+    '"Bank of Japan"',
+    '"interest rates"',
+    '"global economy"',
+    '"global markets"',
+    '"US markets"',
+    '"China economy"',
+    '"inflation"',
+    '"oil prices"',
+    '"trade policy"',
+    '"economic growth"',
+];
+
 const COMPANY_SUFFIX =
     /\b(limited|ltd\.?|corporation|corp\.?|incorporated|inc\.?|plc)\s*$/i;
 
@@ -53,26 +71,7 @@ const CACHE_MINUTES = 10;
 const MAX_ARTICLES = 10;
 const MIN_RELEVANCE_SCORE = 60;
 
-export type NewsCategory = "company" | "government" | "global";
-export type NewsImportance = "high" | "normal";
-export type NewsImpact = "positive" | "negative" | "mixed" | "uncertain";
 
-export interface NewsCandidate {
-    title: string;
-    description: string;
-    url: string;
-    source: string;
-    publishedAt: string;
-    imageUrl?: string;
-}
-
-export interface NewsArticle extends NewsCandidate {
-    category: NewsCategory;
-    importance: NewsImportance;
-    impact: NewsImpact;
-    reason: string;
-    relevanceScore: number;
-}
 
 const cache = new Map<
     string,
@@ -87,7 +86,8 @@ export const cleanCompanyName = (name: string): string =>
 
 export const buildNewsQuery = (
     companyName: string,
-    symbolBase: string
+    symbolBase: string,
+    isInternational = false
 ): string => {
     const parts: string[] = [];
 
@@ -101,9 +101,11 @@ export const buildNewsQuery = (
         );
     }
 
-    // Also retrieve government and global market news.
-    // Gemini will decide whether each article could affect this stock.
-    parts.push(`(${MACRO_NEWS_TERMS.join(" OR ")})`);
+    const macroTerms = isInternational
+        ? INTERNATIONAL_MACRO_NEWS_TERMS
+        : MACRO_NEWS_TERMS;
+
+    parts.push(`(${macroTerms.join(" OR ")})`);
 
     return `(${parts.join(" OR ")})`;
 };
@@ -145,12 +147,19 @@ export const getStockNews = async (
         return cached.data;
     }
 
-    const symbolBase = trimmedSymbol.replace(/\.(NS|BO)$/, "");
+    const isInternationalStock = !/\.(NS|BO)$/i.test(trimmedSymbol);
+
+    const symbolBase = trimmedSymbol.replace(
+        /\.(NS|BO|T|KS|L|DE|SS|SZ)$/i,
+        ""
+    );
 
     let companyName = "";
 
     try {
-        const stock = await getStockData(trimmedSymbol);
+        const stock = isInternationalStock
+            ? await getInternationalStockData(trimmedSymbol)
+            : await getStockData(trimmedSymbol);
 
         if (stock.name) {
             companyName = cleanCompanyName(stock.name);
@@ -159,24 +168,33 @@ export const getStockNews = async (
         // Continue with the stock symbol if company lookup fails.
     }
 
-    const query = buildNewsQuery(companyName, symbolBase);
+    const query = buildNewsQuery(companyName, symbolBase, isInternationalStock);
 
     try {
+        const params: Record<string, string | number> = {
+            q: query,
+            searchIn: "title,description",
+            from: new Date(
+                Date.now() - 30 * 24 * 60 * 60 * 1000
+            )
+                .toISOString()
+                .slice(0, 10),
+            language: "en",
+            sortBy: "publishedAt",
+            pageSize: 15,
+            apiKey: newsApiKey,
+        };
+
+        // Apply Indian domains only to Indian stocks.
+        if (!isInternationalStock) {
+            params.domains =
+                process.env.NEWS_DOMAINS || DEFAULT_DOMAINS;
+        } else if (process.env.INTERNATIONAL_NEWS_DOMAINS) {
+            params.domains = process.env.INTERNATIONAL_NEWS_DOMAINS;
+        }
+
         const response = await axios.get(NEWS_API_URL, {
-            params: {
-                q: query,
-                searchIn: "title,description",
-                domains: process.env.NEWS_DOMAINS || DEFAULT_DOMAINS,
-                from: new Date(
-                    Date.now() - 30 * 24 * 60 * 60 * 1000
-                )
-                    .toISOString()
-                    .slice(0, 10),
-                language: "en",
-                sortBy: "publishedAt",
-                pageSize: 15,
-                apiKey: newsApiKey,
-            },
+            params,
             timeout: 15000,
         });
 

@@ -6,6 +6,7 @@ import type {
     StockFundamentals,
     StockPeriod,
     NewsArticle,
+    PositiveStocksResult,
 } from "../types/stock";
 
 const API_BASE_URL =
@@ -190,4 +191,15 @@ export const compareStocks = async (
     }
 
     return data as StockComparisonResponse;
+};
+
+export const getPositiveStocks = async (): Promise<PositiveStocksResult> => {
+    const response = await fetch(`${API_BASE_URL}/insights/positive`);
+
+    if (!response.ok) {
+        throw new Error("Failed to load stocks to watch");
+    }
+
+    const json = await response.json();
+    return json.data as PositiveStocksResult;
 };

@@ -1,29 +1,5 @@
-
-import type { HistoricalStockData, StockData } from "./stockService.js";
-
-export interface InvestmentScenario {
-    investmentAmount: number;
-    holdingPeriod: string;
-    tradingDays: number;
-    currentPrice: number;
-    shares: number;
-    remainingCash: number;
-    canPurchaseWholeShare: boolean;
-    historicalObservations: number;
-    scenarios?: {
-        name: string;
-        estimatedReturnPercent: number;
-        estimatedProfitLoss: number;
-        estimatedPortfolioValue: number;
-    }[];
-    limitation?: string;
-}
-
-export interface ParsedInvestmentRequest {
-    amount?: number;
-    durationDays?: number;
-    durationLabel?: string;
-}
+import { InvestmentScenario, ParsedInvestmentRequest } from "../types/investment.js";
+import { StockData, HistoricalStockData } from "../types/stock.js";
 
 const parseAmount = (question: string): number | undefined => {
     const normalized = question.replace(/,/g, "");

@@ -1,15 +1,9 @@
 
 import { GoogleGenAI } from "@google/genai";
-import type { NewsArticle, NewsCandidate, NewsCategory, NewsImportance } from "./newsService.js";
-import type {
-    HistoricalStockData,
-    StockData,
-    StockFundamentals,
-} from "./stockService.js";
-import type {
-    InvestmentScenario,
-    ParsedInvestmentRequest,
-} from "./investmentPredictionService.js";
+
+import { AIStockComparisonItem, AIStockQuestionInput, AnalyzeStockNewsInput, PositiveStockPick, PositiveStocksContext } from "../types/ai.js";
+import { NewsCandidate, NewsArticle, NewsCategory } from "../types/news.js";
+import { StockData, StockFundamentals, HistoricalStockData } from "../types/stock.js";
 
 const apiKey = process.env.GEMINI_API_KEY;
 
@@ -18,17 +12,6 @@ if (!apiKey) {
 }
 
 const ai = new GoogleGenAI({ apiKey });
-
-
-
-
-
-
-interface AnalyzeStockNewsInput {
-    symbol: string;
-    companyName: string;
-    articles: NewsCandidate[];
-}
 
 export const analyzeStockNews = async (
     input: AnalyzeStockNewsInput
@@ -273,13 +256,6 @@ Rules:
 };
 
 
-interface AIStockComparisonItem {
-    symbol: string;
-    stock: StockData;
-    history: HistoricalStockData[];
-    fundamentals: StockFundamentals | null;
-    news: NewsArticle[];
-}
 
 
 export const generateStockComparison = async (
@@ -379,18 +355,6 @@ Requirements:
         throw new Error("Failed to generate AI stock comparison");
     }
 };
-
-
-interface AIStockQuestionInput {
-    stock: StockData;
-    fundamentals: StockFundamentals | null;
-    historicalData: HistoricalStockData[];
-    news: NewsArticle[];
-    question: string;
-    investmentRequest?: ParsedInvestmentRequest;
-    investmentScenario?: InvestmentScenario;
-}
-
 
 
 export const generateStockQuestionAnswer = async (
@@ -581,7 +545,7 @@ Only include sections relevant to the user's question.
 
     try {
         const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: "gemini-2.5-flash-lite",
             contents: prompt,
         });
 
@@ -592,4 +556,193 @@ Only include sections relevant to the user's question.
     }
 };
 
+export const identifyPositiveStocks = async (
+    articles: NewsCandidate[],
+    context: PositiveStocksContext
+): Promise<PositiveStockPick[]> => {
+    if (articles.length === 0) {
+        return [];
+    }
 
+    const articlesForAI = articles.map((article, id) => ({
+        id,
+        title: article.title,
+        description: article.description?.slice(0, 300),
+        source: article.source,
+        publishedAt: article.publishedAt,
+    }));
+
+    const prompt = `
+You are a financial news analyst for Indian stocks.
+
+Current time (IST): ${context.currentTimeIST}
+Target trading session: ${context.targetSession}
+NSE trades 09:15-15:30 IST. Article publishedAt values are in UTC
+(IST = UTC + 5:30).
+
+From the supplied articles, identify NSE-listed companies for which the news
+gives a clear reason to expect a POSITIVE price reaction in the target
+session. Return ONLY valid JSON:
+{
+  "picks": [
+    {
+      "companyName": "Tata Consultancy Services",
+      "nseTicker": "TCS",
+      "sector": "IT",
+      "category": "company",
+      "confidence": 85,
+      "reason": "Large deal win may lift sentiment.",
+      "articleIds": [0, 4]
+    }
+  ]
+}
+
+Rules:
+1. Only include companies listed on NSE. companyName must be the official name.
+2. nseTicker is the NSE ticker without any suffix. Use an empty string if you
+   are not confident of it. Never guess.
+3. Include a company only when at least one article gives a clear, explainable
+   reason for a positive impact. Exclude negative, mixed or unclear cases.
+4. Category must be exactly one of:
+   - "company": company-specific results, orders, contracts, upgrades or management news.
+   - "government": policy, RBI, SEBI, tax or regulatory news.
+   - "global": international markets, commodities, currency or overseas events.
+5. Government and global news may support companies in the affected sector
+   (for example, lower crude oil prices for paints or aviation), but the
+   reason must state that connection and an article must support it.
+6. For "company" picks, the company must be named in the cited articles.
+7. Timing matters. News published after the last market close or before the
+   target session opens is likely not yet reflected in the price, so it
+   deserves higher confidence. News published well before the last close is
+   probably already priced in: cap its confidence at 70.
+8. confidence is an integer from 60 to 100. Do not return picks below 60.
+9. articleIds must use the original article ids, 1 to 3 per pick.
+10. Return at most 12 picks, each company only once.
+11. The reason must be under 25 words and use hedged wording ("may", "could").
+    Do not state that the price will rise. Do not invent facts. Do not give
+    buy, sell or hold advice.
+12. Return {"picks": []} if nothing qualifies.
+
+ARTICLES:
+${JSON.stringify(articlesForAI)}
+`;
+
+    const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash-lite",
+        contents: prompt,
+        config: {
+            responseMimeType: "application/json",
+            maxOutputTokens: 8000,
+        },
+    });
+
+    const responseText = response.text?.trim();
+
+    if (!responseText) {
+        console.error("Gemini returned an empty positive stocks response.");
+        return [];
+    }
+
+    let parsed: {
+        picks?: Array<{
+            companyName?: string;
+            nseTicker?: string;
+            sector?: string;
+            category?: string;
+            confidence?: number;
+            reason?: string;
+            articleIds?: unknown;
+        }>;
+    };
+
+    try {
+        parsed = JSON.parse(responseText);
+    } catch (error) {
+        console.error("Failed to parse positive stocks JSON.", {
+            error,
+            responsePreview: responseText.slice(0, 500),
+        });
+        throw new Error("Gemini returned invalid JSON for positive stocks.");
+    }
+
+    if (!Array.isArray(parsed.picks)) {
+        return [];
+    }
+
+    const validCategories = new Set(["company", "government", "global"]);
+    const picks: PositiveStockPick[] = [];
+
+    for (const item of parsed.picks) {
+        if (
+            typeof item.companyName !== "string" ||
+            item.companyName.trim().length < 2 ||
+            !validCategories.has(item.category ?? "") ||
+            typeof item.reason !== "string" ||
+            !item.reason.trim() ||
+            typeof item.confidence !== "number" ||
+            !Number.isFinite(item.confidence) ||
+            item.confidence < 60 ||
+            item.confidence > 100 ||
+            !Array.isArray(item.articleIds)
+        ) {
+            continue;
+        }
+
+        const articleIds = Array.from(
+            new Set(
+                item.articleIds.filter(
+                    (id): id is number =>
+                        typeof id === "number" &&
+                        Number.isInteger(id) &&
+                        id >= 0 &&
+                        id < articles.length
+                )
+            )
+        ).slice(0, 3);
+
+        if (articleIds.length === 0) {
+            continue;
+        }
+
+        const companyName = item.companyName.trim();
+        const ticker = (item.nseTicker ?? "")
+            .trim()
+            .toUpperCase()
+            .replace(/\.(NS|BO)$/, "");
+
+        // Guard against hallucinated companies: a company-specific pick must
+        // actually be mentioned in the articles it cites.
+        if (item.category === "company") {
+            const needle = companyName.toLowerCase();
+
+            const mentioned = articleIds.some((id) => {
+                const text =
+                    `${articles[id]!.title} ${articles[id]!.description}`.toLowerCase();
+
+                return (
+                    text.includes(needle) ||
+                    (/^[A-Z0-9&-]{2,}$/.test(ticker) &&
+                        new RegExp(
+                            `\\b${ticker.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`
+                        ).test(text))
+                );
+            });
+
+            if (!mentioned) {
+                continue;
+            }
+        }
+
+        picks.push({
+            companyName,
+            nseTicker: ticker,
+            sector: typeof item.sector === "string" ? item.sector.trim() : "",
+            category: item.category as NewsCategory,
+            confidence: Math.round(item.confidence),
+            reason: item.reason.trim(),
+            articleIds,
+        });
+    }
+
+    return picks;
+};

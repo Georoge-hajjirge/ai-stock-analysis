@@ -3,8 +3,10 @@ import { useState } from "react";
 import {
     ArrowRight,
     ChartNoAxesCombined,
+    Globe,
     Search,
     Sparkles,
+    X,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -12,12 +14,21 @@ import Header from "../components/Header";
 import SearchResults from "../components/SearchResults";
 import { searchStocks } from "../services/stockService";
 import type { StockSearchResult } from "../types/stock";
+import PositiveStocksSection from "../components/PositiveStocksSection";
 
 const popularStocks = [
     { symbol: "TCS.NS", name: "Tata Consultancy Services" },
     { symbol: "INFY.NS", name: "Infosys" },
     { symbol: "RELIANCE.NS", name: "Reliance Industries" },
     { symbol: "HDFCBANK.NS", name: "HDFC Bank" },
+];
+const globalMarkets = [
+    { country: "USA", flag: "🇺🇸", code: "usa", exchange: "NYSE · NASDAQ" },
+    { country: "Japan", flag: "🇯🇵", code: "japan", exchange: "Tokyo Stock Exchange" },
+    { country: "China", flag: "🇨🇳", code: "china", exchange: "Shanghai · Shenzhen" },
+    { country: "South Korea", flag: "🇰🇷", code: "south-korea", exchange: "Korea Exchange" },
+    { country: "United Kingdom", flag: "🇬🇧", code: "uk", exchange: "London Stock Exchange" },
+    { country: "Germany", flag: "🇩🇪", code: "germany", exchange: "XETRA · Frankfurt" },
 ];
 
 function Dashboard() {
@@ -125,10 +136,7 @@ function Dashboard() {
                                         onChange={(event) => {
                                             const value = event.target.value;
                                             setQuery(value);
-                                            sessionStorage.setItem(
-                                                "stockSearchQuery",
-                                                value
-                                            );
+                                            sessionStorage.setItem("stockSearchQuery", value);
                                         }}
                                         onKeyDown={(event) => {
                                             if (event.key === "Enter") {
@@ -138,6 +146,24 @@ function Dashboard() {
                                         placeholder="Search company or stock symbol..."
                                         className="min-w-0 flex-1 bg-transparent px-3 py-3 text-sm text-slate-900 outline-none placeholder:text-slate-400"
                                     />
+
+                                    {query && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setQuery("");
+                                                setResults([]);
+                                                setError("");
+                                                sessionStorage.removeItem("stockSearchQuery");
+                                                sessionStorage.removeItem("stockSearchResults");
+                                            }}
+                                            title="Clear search"
+                                            aria-label="Clear search"
+                                            className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                                        >
+                                            <X size={18} />
+                                        </button>
+                                    )}
 
                                     <button
                                         onClick={handleSearch}
@@ -318,6 +344,81 @@ function Dashboard() {
                         </button>
                     </div>
                 </section>
+
+                {/* Global Markets */}
+
+                <section className="mx-auto mt-6 w-full max-w-7xl px-5 py-10 lg:px-8">
+                    <div className="mb-7 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+                        <div>
+                            <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-blue-600">
+                                <Globe size={17} />
+                                INTERNATIONAL INVESTING
+                            </div>
+
+                            <h2 className="text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
+                                Explore Global Markets
+                            </h2>
+
+                            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+                                Discover companies, track market performance and explore
+                                investment opportunities across international markets.
+                            </p>
+                        </div>
+
+                        <span className="inline-flex w-fit items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600">
+                            <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                            6 Markets Available
+                        </span>
+                    </div>
+
+                    <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                        {globalMarkets.map((market) => (
+                            <button
+                                key={market.code}
+                                onClick={() => navigate(`/global-market/${market.code}`)}
+                                className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-blue-300 hover:shadow-xl hover:shadow-blue-900/5"
+                            >
+                                <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-blue-50 opacity-70 transition-transform duration-500 group-hover:scale-150" />
+
+                                <div className="relative">
+                                    <div className="flex items-start justify-between">
+                                        <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-100 bg-slate-50 text-4xl shadow-sm transition-all duration-300 group-hover:scale-110 group-hover:bg-blue-50">
+                                            {market.flag}
+                                        </div>
+
+                                        <div className="rounded-full border border-slate-200 bg-white p-2 text-slate-400 transition-all duration-300 group-hover:border-blue-200 group-hover:bg-blue-600 group-hover:text-white">
+                                            <ArrowRight
+                                                size={17}
+                                                className="transition-transform duration-300 group-hover:translate-x-0.5"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-6">
+                                        <h3 className="text-lg font-bold text-slate-900 transition-colors group-hover:text-blue-700">
+                                            {market.country}
+                                        </h3>
+
+                                        <p className="mt-1.5 text-sm text-slate-500">
+                                            {market.exchange}
+                                        </p>
+                                    </div>
+
+                                    <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-4">
+                                        <span className="text-sm font-semibold text-blue-600">
+                                            Explore market
+                                        </span>
+
+                                        <span className="text-xs font-medium text-slate-400 transition-colors group-hover:text-blue-600">
+                                            View stocks
+                                        </span>
+                                    </div>
+                                </div>
+                            </button>
+                        ))}
+                    </div>
+                </section>
+                <PositiveStocksSection />
             </main>
         </div>
     );

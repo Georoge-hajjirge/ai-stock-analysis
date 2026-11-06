@@ -29,29 +29,35 @@ const pendingBharatStockRequests = new Map<
 >();
 
 const getCacheTtl = (endpoint: string): number => {
-    const hours = 60 * 60 * 1000;
+    const minutes = 60 * 1000;
+    const hours = 60 * minutes;
 
+    // Mutual fund holdings: 2 hours
     if (endpoint.startsWith("/v1/mf/portfolios/")) {
-        return 24 * hours;
+        return 2 * hours;
     }
 
+    // Mutual fund portfolio search: 3 hours
     if (endpoint === "/v1/mf/portfolios") {
-        return 12 * hours;
+        return 3 * hours;
     }
 
+    // FII/DII activity: 1 hour
     if (endpoint === "/v1/market/fii-dii") {
-        return 12 * hours;
+        return 1 * hours;
     }
 
+    // Bulk deals, block deals and insider trades: 30 minutes
     if (
         endpoint === "/v1/deals/bulk" ||
         endpoint === "/v1/deals/block" ||
         endpoint === "/v1/insider-trades"
     ) {
-        return 30 * 60 * 1000;
+        return 30 * minutes;
     }
 
-    return 5 * 60 * 1000;
+    // Default cache: 5 minutes
+    return 5 * minutes;
 };
 
 
