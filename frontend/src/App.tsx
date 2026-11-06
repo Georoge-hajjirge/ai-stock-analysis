@@ -9,6 +9,7 @@ import InvestorIntelligencePage from "./pages/InvestorIntelligencePage";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ProtectedRoute from "./components/ProtectedRoute";
+import GlobalMarketPage from "./pages/GlobalMarketPage";
 
 function App() {
   return (
@@ -33,7 +34,10 @@ function App() {
         path="/investor-intelligence"
         element={<InvestorIntelligencePage />}
       />
-
+      <Route
+        path="/global-market/:country"
+        element={<GlobalMarketPage />}
+      />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

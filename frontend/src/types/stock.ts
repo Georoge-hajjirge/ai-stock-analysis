@@ -104,3 +104,31 @@ export interface PriceAlert {
     createdAt: number;
     triggeredAt?: number;
 }
+
+
+export type SignalKind = "news" | "momentum" | "warning";
+export type Outlook = "Strong" | "Moderate" | "Mild";
+
+export interface PositiveSignal {
+    kind: SignalKind;
+    label: string;
+}
+
+export interface PositiveStockItem {
+    symbol: string;
+    name: string;
+    sector: string;
+    price?: number;
+    changePercent?: number;
+    outlook?: Outlook;
+    typicalMovePercent?: number;
+    expectedMove?: { low: number; high: number };
+    reason: string;
+    signals: PositiveSignal[];
+}
+
+export interface PositiveStocksResult {
+    generatedAt: string;
+    targetSession: string;
+    items: PositiveStockItem[];
+}
