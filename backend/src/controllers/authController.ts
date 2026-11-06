@@ -6,6 +6,18 @@ import { AuthRequest } from "../middleware/authMiddleware.js";
 
 const COOKIE_NAME = "token";
 
+// Production (Render): the frontend may be on a different site (e.g. localhost:5173
+// or a separate domain), so the cookie must be SameSite=None; Secure to be sent on
+// cross-site requests. Local development keeps SameSite=Lax over plain http.
+const isProduction = process.env.NODE_ENV === "production";
+
+const cookieBase = {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction ? ("none" as const) : ("lax" as const),
+    path: "/",
+};
+
 function setAuthCookie(res: Response, userId: string): void {
     const secret = process.env.JWT_SECRET;
 
@@ -19,11 +31,8 @@ function setAuthCookie(res: Response, userId: string): void {
     });
 
     res.cookie(COOKIE_NAME, token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
+        ...cookieBase,
         maxAge: 7 * 24 * 60 * 60 * 1000,
-        path: "/",
     });
 }
 
@@ -118,7 +127,13 @@ export async function login(req: Request, res: Response): Promise<void> {
         setAuthCookie(res, user.id);
 
         res.json({
-            user: { id: user.id, firstName: user.firstName, lastName: user.lastName, email: user.email },
+            user: {
+                id: user.id,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                phoneNumber: user.phoneNumber,
+                email: user.email,
+            },
         });
     } catch (error) {
         console.error("Login failed:", error);
@@ -127,12 +142,8 @@ export async function login(req: Request, res: Response): Promise<void> {
 }
 
 export function logout(_req: Request, res: Response): void {
-    res.clearCookie(COOKIE_NAME, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path: "/",
-    });
+    // Must use the same cookie attributes as when it was set, or browsers won't clear it.
+    res.clearCookie(COOKIE_NAME, cookieBase);
 
     res.json({ message: "Logged out successfully" });
 }
