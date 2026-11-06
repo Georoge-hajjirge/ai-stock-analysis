@@ -45,7 +45,15 @@ export default function Watchlist() {
         setError("");
 
         if (favourites.length === 0) {
-            setStockData({});
+            setStockData((current) =>
+                Object.keys(current).length === 0 ? current : {},
+            );
+            setLoadingPrices(false);
+            return;
+        } if (favourites.length === 0) {
+            setStockData((current) =>
+                Object.keys(current).length === 0 ? current : {},
+            );
             setLoadingPrices(false);
             return;
         }
@@ -118,6 +126,7 @@ export default function Watchlist() {
         setShowDeleteModal(false);
         setSelectedSymbol(null);
     };
+
     return (
         <div className="min-h-screen bg-slate-50 text-slate-900">
             <Header
