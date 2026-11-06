@@ -11,6 +11,7 @@ import newsRoutes from "./routes/newsRoutes.js";
 import investorIntelligenceRoutes from "./routes/investorIntelligenceRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 import favouritesRoutes from "./routes/favouritesRoutes.js";
+import internationalStockRoutes from "./routes/internationalStockRoutes.js";
 
 const app = express();
 const PORT = Number(process.env.PORT) || 5000;
@@ -25,13 +26,6 @@ app.use(
 app.use(express.json());
 app.use(cookieParser());
 
-app.get("/api/health", (_req, res) => {
-    res.json({
-        success: true,
-        message: "AI Stock Backend is running",
-    });
-});
-
 // Authentication routes
 app.use("/api/auth", authRoutes);
 
@@ -42,6 +36,7 @@ app.use("/api/favourites", favouritesRoutes);
 app.use("/api/stocks", stockRoutes);
 app.use("/api/news", newsRoutes);
 app.use("/api/investor-intelligence", investorIntelligenceRoutes);
+app.use("/api/international-stocks", internationalStockRoutes);
 
 async function startServer(): Promise<void> {
     if (!process.env.JWT_SECRET) {
@@ -50,8 +45,8 @@ async function startServer(): Promise<void> {
 
     await connectDB();
 
-    app.listen(PORT, () => {
-        console.log(`Server running on http://localhost:${PORT}`);
+    app.listen(PORT, "0.0.0.0", () => {
+        console.log(`Server running on port ${PORT}`);
     });
 }
 

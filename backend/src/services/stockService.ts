@@ -1,4 +1,6 @@
 import axios from "axios";
+import { StockPeriod, StockSearchResult, StockData, HistoricalStockData, StockFundamentals } from "../types/stock.js";
+
 const YAHOO_SEARCH_URL = process.env.YAHOO_SEARCH_URL;
 const YAHOO_CHART_URL =
     process.env.YAHOO_CHART_URL;
@@ -10,63 +12,6 @@ const BHARATSTOCK_API_KEY =
     process.env.BHARATSTOCK_API_KEY;
 const YAHOO_API_TIMEOUT = Number(process.env.YAHOO_API_TIMEOUT || 15000);
 
-
-export interface StockSearchResult {
-    symbol: string;
-    name: string;
-    exchange: string;
-    exchangeDisplayName?: string;
-    type: string;
-}
-
-export interface StockData {
-    symbol: string;
-    name?: string;
-    exchange?: string;
-    currency?: string;
-    price?: number;
-    previousClose?: number;
-    change?: number;
-    changePercent?: number;
-    open?: number;
-    high?: number;
-    low?: number;
-    volume?: number;
-    fiftyTwoWeekHigh?: number;
-    fiftyTwoWeekLow?: number;
-    timestamp?: number;
-}
-
-export interface HistoricalStockData {
-    timestamp: number;
-    date: string;
-    open?: number;
-    high?: number;
-    low?: number;
-    close?: number;
-    volume?: number;
-}
-
-export type StockPeriod = "1D" | "1W" | "1M" | "6M" | "1Y" | "5Y" | "ALL";
-export interface StockFundamentals {
-    symbol: string;
-    price?: number;
-    marketCap?: number;
-    sharesOutstanding?: number;
-    trailingPE?: number;
-    priceToBook?: number;
-    bookValuePerShare?: number;
-    eps?: number;
-    returnOnEquity?: number;
-    returnOnCapitalEmployed?: number;
-    dividendYield?: number;
-    faceValue?: number;
-    fiftyTwoWeekHigh?: number;
-    fiftyTwoWeekLow?: number;
-    asOfDate?: string;
-    financialsPeriodType?: string;
-    financialsFiscalYear?: string;
-}
 
 const getPeriodConfig = (period: StockPeriod) => {
     switch (period) {
@@ -345,7 +290,7 @@ export const getHistoricalData = async (
         );
     }
 };
-const FUNDAMENTALS_CACHE_TTL = 12 * 60 * 60 * 1000;
+const FUNDAMENTALS_CACHE_TTL = 3 * 60 * 60 * 1000;
 
 const fundamentalsCache = new Map<
     string,

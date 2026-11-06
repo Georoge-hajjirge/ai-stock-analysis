@@ -5,7 +5,7 @@ import {
     getStockData,
     getHistoricalData,
     getFundamentals,
-    type StockPeriod,
+
 } from "../services/stockService.js";
 import { getStockNews } from "../services/newsService.js";
 import {
@@ -14,10 +14,11 @@ import {
 } from "../services/aiService.js";
 import {
     calculateInvestmentScenarios,
-    InvestmentScenario,
-    ParsedInvestmentRequest,
     parseInvestmentRequest,
+
 } from "../services/investmentPredictionService.js";
+import { ParsedInvestmentRequest, InvestmentScenario } from "../types/investment.js";
+import { StockPeriod } from "../types/stock.js";
 
 export const searchStockController = async (
     req: Request,
